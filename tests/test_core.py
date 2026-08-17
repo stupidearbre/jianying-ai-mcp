@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from jianying_ai_mcp.capabilities import capability_report
+from jianying_ai_mcp.draft_crypto import classify_draft_bytes, load_draft_json
 from jianying_ai_mcp.config import Settings, compatibility_notice
 from jianying_ai_mcp.draft_ops import (
     ManifestError,
@@ -163,15 +164,25 @@ class CoreTests(unittest.TestCase):
         )
         self.assertEqual(batch["count"], 2)
 
-    def test_encrypted_reference_rejected(self) -> None:
+    def test_draft_format_detection_and_missing_reader_error(self) -> None:
+        self.assertEqual(classify_draft_bytes(b'{"tracks":[]}'), "plaintext_json")
+        self.assertEqual(classify_draft_bytes(b"not-json"), "unknown")
         encrypted = ENCRYPTED_REFERENCE / "draft_content.json"
         if not encrypted.is_file():
             self.skipTest("没有加密草稿样本")
+        self.assertEqual(classify_draft_bytes(encrypted.read_bytes()), "jianying_encrypted")
         target = self.drafts / "加密参考"
         target.mkdir()
         (target / "draft_content.json").write_bytes(encrypted.read_bytes())
         with self.assertRaises(ManifestError):
             analyze_reference_draft(self.settings, "加密参考")
+
+    def test_plaintext_loader_reports_format(self) -> None:
+        source = self.root / "plain.json"
+        source.write_text('{"tracks":[],"materials":{}}', encoding="utf-8")
+        loaded = load_draft_json(self.settings, source)
+        self.assertEqual(loaded.source_format, "plaintext_json")
+        self.assertEqual(loaded.content["tracks"], [])
 
     def test_unverified_features_rejected(self) -> None:
         manifest = self.manifest("拒绝测试")

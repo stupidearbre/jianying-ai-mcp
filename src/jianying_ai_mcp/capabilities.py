@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from .config import TESTED_DRAFT_LIBRARY_VERSION, TESTED_JIANYING_VERSION
+from .config import Settings, TESTED_DRAFT_LIBRARY_VERSION, TESTED_JIANYING_VERSION
+from .draft_crypto import crypto_status
 
 
 CAPABILITIES = {
@@ -32,7 +33,7 @@ CAPABILITIES = {
         "mask": "pyJianYingDraft 0.3.0 可写结构，但剪映 10.0.5 未显示；首版禁用",
         "blur_background": "结构可写但实测未显示；首版禁用",
         "audio_volume_keyframes": "结构可写但界面未观察到；首版禁用",
-        "encrypted_reference_draft": "没有经源码审计的读取器；拒绝解析",
+        "encrypted_reference_draft": "需要本地 jy-draftc 兼容读取器和剪映 videoeditor.dll；仅处理临时副本",
         "video_semantic_understanding": "已提供代表帧与字幕上下文；准确度取决于所用多模态模型和采样密度",
         "automatic_caption_or_transcript": "支持旁挂 SRT/VTT 和可选 Groq/OpenAI Whisper 语句级转写；尚非逐字强制对齐",
     },
@@ -49,5 +50,16 @@ CAPABILITIES = {
 }
 
 
-def capability_report() -> dict[str, object]:
-    return CAPABILITIES
+def capability_report(settings: Settings | None = None) -> dict[str, object]:
+    report: dict[str, object] = {
+        key: list(value) if isinstance(value, list) else dict(value)
+        for key, value in CAPABILITIES.items()
+    }
+    if settings is not None:
+        encrypted = crypto_status(settings)
+        report["encrypted_draft_reader"] = encrypted
+        if encrypted["available"]:
+            verified = report["verified"]
+            assert isinstance(verified, list)
+            verified.extend(["read_encrypted_reference_draft", "copy_replace_and_batch_encrypted_template"])
+    return report

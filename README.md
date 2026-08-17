@@ -15,7 +15,7 @@
 ## MCP 工具
 
 - `get_jianying_capabilities`：版本、能力与限制
-- `analyze_reference_draft`：从明文草稿提取剪辑蓝图
+- `analyze_reference_draft`：从明文或本机可解密草稿提取剪辑蓝图
 - `build_draft`：一次提交编辑清单，从零生成草稿
 - `build_from_reference`：复制蓝图并按轨道/片段换料换字
 - `batch_from_template`：一个模板批量生成多份草稿
@@ -57,12 +57,19 @@ npx skills add . -g
 - `JIANYING_DRAFT_ROOT`：剪映草稿根目录
 - `JIANYING_MCP_WORK_ROOT`：暂存和参考蓝图目录
 - `JIANYING_EXE`：剪映程序路径，用于检测版本
+- `JIANYING_DRAFT_CRYPTO`：可选的 `jy-draftc.exe` 兼容读取器；启用加密草稿学习/复制
 - `JIANYING_MCP_TRANSPORT`：默认 `stdio`，也可使用 `sse` 或 `streamable-http`
 - `JIANYING_FFMPEG` / `JIANYING_FFPROBE`：视频观察器使用的可执行文件
 - `JIANYING_YT_DLP`：可选，仅 URL 输入需要
 - `GROQ_API_KEY` / `OPENAI_API_KEY`：可选，仅无字幕时的 Whisper 转写需要
 
 ffmpeg/ffprobe 可从 `PATH` 自动发现，也可通过环境变量显式配置。视频和画面始终留在本机；只有无字幕且启用 Whisper API 时会上传压缩音频。
+
+## 加密草稿读取
+
+剪映保存后的 `draft_content.json` 可能是加密文本。0.3 通过已审计的 MIT 开源 `jy-draftc` 接口调用本机剪映目录中的 `videoeditor.dll`，支持分析、参考复制和批量换料。读取时会先复制到一次性工作目录，解密结果用完即删，绝不原地改写参考草稿。
+
+仓库包含最小读取器源码 [native/jy_draft_crypto.cpp](native/jy_draft_crypto.cpp)，可用 MinGW-w64 执行 `g++ -std=c++17 -O2 -municode -static -o jy-draftc.exe native/jy_draft_crypto.cpp` 构建。随后配置 `JIANYING_DRAFT_CRYPTO`；`JIANYING_EXE` 必须指向同一套剪映安装。先调用 `get_jianying_capabilities`，确认 `encrypted_draft_reader.available=true` 再读取加密草稿。
 
 ## 视频理解
 
@@ -82,7 +89,7 @@ ffmpeg/ffprobe 可从 `PATH` 自动发现，也可通过环境变量显式配置
 
 ## 当前边界
 
-当前不自动操作剪映内置音乐/音效库、TTS、节拍卡点和自动导出。独立视频观察器已支持旁挂字幕及可选 Whisper 语句级转写，但不等同于剪映内置字幕识别。蒙版、模糊背景及音量关键帧因当前版本实测不稳定而被显式拒绝。参考草稿只支持明文 JSON；不调用未经源码审计的解密程序。
+当前不自动操作剪映内置音乐/音效库、TTS、节拍卡点和自动导出。独立视频观察器已支持旁挂字幕及可选 Whisper 语句级转写，但不等同于剪映内置字幕识别。蒙版、模糊背景及音量关键帧因当前版本实测不稳定而被显式拒绝。参考草稿支持明文 JSON；配置本地读取器后也支持有权访问的剪映加密草稿。
 
 第三方许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 

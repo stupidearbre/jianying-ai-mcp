@@ -11,6 +11,7 @@ import pyJianYingDraft as draft
 from pyJianYingDraft.metadata import AudioSceneEffectType, SpeechToSongType, ToneEffectType
 
 from .config import Settings, compatibility_notice
+from .draft_crypto import DraftCryptoError, load_draft_json
 
 
 INVALID_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -395,24 +396,21 @@ def build_manifest(settings: Settings, manifest: dict[str, Any], *, dry_run: boo
             shutil.rmtree(stage_root)
 
 
-def _plain_content(settings: Settings, draft_name: str) -> tuple[Path, dict[str, Any]]:
+def _draft_content(settings: Settings, draft_name: str) -> tuple[Path, dict[str, Any], str]:
     path = _child(settings.draft_root, draft_name)
     content_path = path / "draft_content.json"
     if not content_path.is_file():
         raise FileNotFoundError(content_path)
-    raw = content_path.read_bytes()
     try:
-        content = json.loads(raw.decode("utf-8-sig"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ManifestError(
-            "参考草稿不是可解析的明文 JSON；当前未接入经源码审计的加密草稿读取器"
-        ) from exc
-    return path, content
+        loaded = load_draft_json(settings, content_path, label=f"参考草稿 {draft_name}")
+    except DraftCryptoError as exc:
+        raise ManifestError(str(exc)) from exc
+    return path, loaded.content, loaded.source_format
 
 
 def analyze_reference_draft(settings: Settings, draft_name: str, *, include_text: bool = False) -> dict[str, Any]:
     draft_name = _safe_name(draft_name, "参考草稿名称")
-    path, content = _plain_content(settings, draft_name)
+    path, content, source_format = _draft_content(settings, draft_name)
     materials = content.get("materials", {})
     text_by_id: dict[str, str] = {}
     for material in materials.get("texts", []):
@@ -445,6 +443,7 @@ def analyze_reference_draft(settings: Settings, draft_name: str, *, include_text
         )
     profile = {
         "reference_draft": draft_name,
+        "source_format": source_format,
         "duration_us": content.get("duration", 0),
         "canvas": {
             "width": content.get("canvas_config", {}).get("width"),
@@ -454,7 +453,7 @@ def analyze_reference_draft(settings: Settings, draft_name: str, *, include_text
         "tracks": tracks,
         "material_counts": {key: len(value) for key, value in materials.items() if isinstance(value, list) and value},
         "learnable_dimensions": ["轨道布局", "片段时间与节奏", "字幕样式", "动画/滤镜/特效引用", "混合与关键帧结构"],
-        "limitations": ["只能读取明文草稿", "在线资源仍受剪映版本、账号和缓存影响"],
+        "limitations": ["加密草稿只读取临时副本，不修改原文件", "在线资源仍受剪映版本、账号和缓存影响"],
     }
     profile_root = settings.work_root / "reference_profiles"
     profile_root.mkdir(parents=True, exist_ok=True)
@@ -479,7 +478,7 @@ def build_from_reference(
 ) -> dict[str, Any]:
     reference_draft = _safe_name(reference_draft, "参考草稿名称")
     new_draft_name = _safe_name(new_draft_name, "新草稿名称")
-    source, _ = _plain_content(settings, reference_draft)
+    source, content, source_format = _draft_content(settings, reference_draft)
     if (source / ".locked").exists():
         raise ManifestError("参考草稿正被剪映占用；请返回首页后再复制")
     settings.work_root.mkdir(parents=True, exist_ok=True)
@@ -488,6 +487,20 @@ def build_from_reference(
     staged = stage_root / new_draft_name
     try:
         shutil.copytree(source, staged)
+        (staged / "draft_content.json").write_text(
+            json.dumps(content, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        meta_path = source / "draft_meta_info.json"
+        if meta_path.is_file():
+            try:
+                loaded_meta = load_draft_json(settings, meta_path, label=f"参考草稿 {reference_draft} 元数据")
+                (staged / "draft_meta_info.json").write_text(
+                    json.dumps(loaded_meta.content, ensure_ascii=False, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+            except DraftCryptoError:
+                pass
         script = draft.DraftFolder(str(stage_root)).load_template(new_draft_name)
         for spec in replacements or []:
             track_type = spec.get("track_type", "video")
@@ -526,6 +539,7 @@ def build_from_reference(
             "success": True,
             "mode": "reference_blueprint_copy",
             "reference_draft": reference_draft,
+            "source_format": source_format,
             "draft_name": new_draft_name,
             "draft_path": None if dry_run else str(target),
             "dry_run": dry_run,
@@ -564,4 +578,3 @@ def batch_from_template(settings: Settings, template_draft: str, jobs: list[dict
         "results": results,
         "compatibility": compatibility_notice(settings),
     }
-

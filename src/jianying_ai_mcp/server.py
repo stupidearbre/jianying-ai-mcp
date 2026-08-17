@@ -13,6 +13,7 @@ from .draft_ops import (
     build_from_reference as run_reference_build,
     build_manifest,
 )
+from .draft_crypto import crypto_status
 from .video_observer import analyze_video, get_analysis_context, observer_status, save_observations
 
 
@@ -61,7 +62,7 @@ async def get_jianying_capabilities(ctx: Context) -> dict[str, Any]:
     await _stage(ctx, 1, 1, "读取能力与版本")
     return {
         "success": True,
-        "capabilities": capability_report(),
+        "capabilities": capability_report(settings),
         "compatibility": compatibility_notice(settings),
         "paths": {
             "draft_root": str(settings.draft_root),
@@ -69,6 +70,7 @@ async def get_jianying_capabilities(ctx: Context) -> dict[str, Any]:
             "jianying_exe": str(settings.jianying_exe) if settings.jianying_exe else None,
         },
         "video_observer": observer_status(settings),
+        "encrypted_draft_reader": crypto_status(settings),
         "recommended_modes": ["creative", "strict", "reference"],
     }
 
@@ -165,7 +167,7 @@ async def analyze_reference_draft(
     ctx: Context,
     include_text: bool = False,
 ) -> dict[str, Any]:
-    """读取一个明文参考草稿并提取剪辑蓝图。加密草稿会明确拒绝，不会猜测内容。"""
+    """读取参考草稿并提取剪辑蓝图；已配置读取器时支持剪映加密草稿且不修改源文件。"""
     settings = Settings.from_env()
     return await _execute(
         ctx,
@@ -208,7 +210,7 @@ async def build_from_reference(
     text_replacements: list[dict[str, Any]] | None = None,
     dry_run: bool = True,
 ) -> dict[str, Any]:
-    """复制可读参考草稿的剪辑蓝图，并按轨道与片段下标替换素材或文本。
+    """复制明文或可解密参考草稿的剪辑蓝图，并按轨道与片段下标替换素材或文本。
 
     replacements 项：{track_type, track_name? 或 track_index?, segment_index, source,
     source_start?, source_duration?}。text_replacements 项：{track_name? 或 track_index?,

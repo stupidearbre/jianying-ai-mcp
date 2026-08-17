@@ -19,6 +19,7 @@ class Settings:
     ffmpeg_exe: Path | None = None
     ffprobe_exe: Path | None = None
     yt_dlp_exe: Path | None = None
+    draft_crypto_exe: Path | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -40,6 +41,7 @@ class Settings:
             ffmpeg_exe=_find_media_tool("ffmpeg", "JIANYING_FFMPEG"),
             ffprobe_exe=_find_media_tool("ffprobe", "JIANYING_FFPROBE"),
             yt_dlp_exe=_find_media_tool("yt-dlp", "JIANYING_YT_DLP"),
+            draft_crypto_exe=_find_draft_crypto(),
         )
 
 
@@ -69,6 +71,18 @@ def _find_media_tool(name: str, env_name: str) -> Path | None:
         return Path(found).resolve()
 
     return None
+
+
+def _find_draft_crypto() -> Path | None:
+    configured = _find_media_tool("jy-draftc", "JIANYING_DRAFT_CRYPTO")
+    if configured:
+        return configured
+    local_app_data = Path(os.environ.get("LOCALAPPDATA", ""))
+    candidates = [
+        Path.cwd() / ".jianying-mcp" / "tools" / "jy-draftc.exe",
+        local_app_data / "jianying-ai-mcp" / "bin" / "jy-draftc.exe",
+    ]
+    return next((path.resolve() for path in candidates if path.is_file()), None)
 
 
 def _version_tuple(value: str) -> tuple[int, ...]:

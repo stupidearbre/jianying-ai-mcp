@@ -50,7 +50,7 @@ description: Understand local or URL videos through timestamped transcripts and 
 
 - 用户要求高度一致：使用 `build_from_reference` 或 `batch_from_template`，保留时间轴和资源引用。
 - 用户只要求相似节奏：读取蓝图后生成新的 manifest，复用片段长度分布、轨道层级、字幕位置和代表性动画。
-- 草稿已加密：明确说明当前没有经源码审计的读取器；请用户提供仍为明文的模板副本，或以导出视频作为未来视觉分析输入。不得猜测或偷偷调用不透明解密程序。
+- 草稿已加密：读取 [encrypted-drafts.md](references/encrypted-drafts.md)。只有 `encrypted_draft_reader.available=true` 时继续；只处理临时副本，绝不改写参考草稿。读取器不可用时说明缺少的本地依赖，不要谎称草稿不可读。
 
 ## 能力约束
 
