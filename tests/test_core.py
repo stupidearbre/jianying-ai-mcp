@@ -7,7 +7,16 @@ from pathlib import Path
 
 from jianying_ai_mcp.capabilities import capability_report
 from jianying_ai_mcp.draft_crypto import classify_draft_bytes, load_draft_json
-from jianying_ai_mcp.config import Settings, compatibility_notice
+from jianying_ai_mcp.config import (
+    JIANYING_PROFILES,
+    TARGET_JIANYING_VERSION,
+    TEST_DRAFT_NAME_PREFIX,
+    TESTED_DRAFT_LIBRARY_VERSION,
+    VERIFIED_JIANYING_VERSION,
+    Settings,
+    compatibility_notice,
+    is_test_draft_name,
+)
 from jianying_ai_mcp.draft_ops import (
     ManifestError,
     analyze_reference_draft,
@@ -38,10 +47,15 @@ class CoreTests(unittest.TestCase):
         self.work = self.root / "work"
         self.drafts.mkdir()
         detected = Settings.from_env()
-        self.settings = Settings(
+        self.settings = self._settings_for(VERIFIED_JIANYING_VERSION, detected)
+        self.target_settings = self._settings_for(TARGET_JIANYING_VERSION, detected)
+
+    def _settings_for(self, version: str, detected: Settings | None = None) -> Settings:
+        detected = detected or Settings.from_env()
+        return Settings(
             self.drafts,
             self.work,
-            self.root / "JianyingPro" / "10.0.5.13816" / "JianyingPro.exe",
+            self.root / "JianyingPro" / version / "JianyingPro.exe",
             detected.ffmpeg_exe,
             detected.ffprobe_exe,
             detected.yt_dlp_exe,
@@ -50,7 +64,7 @@ class CoreTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def manifest(self, name: str = "集成测试") -> dict:
+    def manifest(self, name: str = f"{TEST_DRAFT_NAME_PREFIX}集成测试") -> dict:
         return {
             "draft": {"name": name, "width": 1280, "height": 720, "fps": 30},
             "tracks": [
@@ -112,8 +126,55 @@ class CoreTests(unittest.TestCase):
         }
 
     def test_capabilities_and_version(self) -> None:
-        self.assertIn("create_draft", capability_report()["verified"])
-        self.assertTrue(compatibility_notice(self.settings)["matches_tested_version"])
+        baseline = capability_report()
+        self.assertIn("create_draft", baseline["verified"])
+        self.assertEqual(baseline["tested_versions"]["pyJianYingDraft"], "0.3.1")
+        self.assertEqual(TESTED_DRAFT_LIBRARY_VERSION, "0.3.1")
+        self.assertEqual(set(JIANYING_PROFILES), {VERIFIED_JIANYING_VERSION, TARGET_JIANYING_VERSION})
+        notice = compatibility_notice(self.settings)
+        self.assertTrue(notice["matches_tested_version"])
+        self.assertEqual(notice["profile_status"], "verified")
+        self.assertEqual(notice["profile"], VERIFIED_JIANYING_VERSION)
+
+    def test_target_profile_is_pending_blackbox(self) -> None:
+        notice = compatibility_notice(self.target_settings)
+        self.assertEqual(notice["profile"], TARGET_JIANYING_VERSION)
+        self.assertEqual(notice["profile_status"], "pending_blackbox")
+        self.assertEqual(notice["tested"], VERIFIED_JIANYING_VERSION)
+        self.assertFalse(notice["matches_tested_version"])
+        self.assertIn("待黑盒回归", str(notice["message"]))
+        self.assertIn("wy 批准", str(notice["message"]))
+        report = capability_report(self.target_settings)
+        self.assertEqual(report["profile_status"], "pending_blackbox")
+        self.assertNotIn("create_draft", report["verified"])
+        self.assertIn("create_draft", report["pending_blackbox"])
+        self.assertIn("mask", report["candidates"])
+        self.assertIn("mask", report["partial_or_disabled"])
+        self.assertNotIn("mask", report["verified"])
+        profiles = report["profiles"]
+        self.assertEqual(profiles[TARGET_JIANYING_VERSION]["verification"], "pending_blackbox")
+        self.assertEqual(profiles[VERIFIED_JIANYING_VERSION]["verification"], "verified")
+
+    def test_unlisted_version_is_not_treated_as_verified(self) -> None:
+        notice = compatibility_notice(self._settings_for("9.9.9"))
+        self.assertEqual(notice["profile_status"], "unlisted")
+        self.assertIsNone(notice["profile"])
+        self.assertFalse(notice["matches_tested_version"])
+        report = capability_report(self._settings_for("9.9.9"))
+        self.assertNotIn("create_draft", report["verified"])
+        self.assertIn("create_draft", report["pending_blackbox"])
+
+    def test_test_draft_prefix_publishes_once(self) -> None:
+        self.assertTrue(TEST_DRAFT_NAME_PREFIX.startswith("TEST-laowang-"))
+        name = f"{TEST_DRAFT_NAME_PREFIX}结构稿"
+        self.assertTrue(is_test_draft_name(name))
+        result = build_manifest(self.target_settings, self.manifest(name), dry_run=False)
+        self.assertTrue(result["draft_name"].startswith(TEST_DRAFT_NAME_PREFIX))
+        self.assertNotIn(":\\", result["draft_name"])
+        output = Path(result["draft_path"])
+        self.assertTrue((output / "draft_content.json").is_file())
+        with self.assertRaises(FileExistsError):
+            build_manifest(self.target_settings, self.manifest(name), dry_run=False)
 
     def test_manifest_dry_run_and_publish(self) -> None:
         preview = build_manifest(self.settings, self.manifest(), dry_run=True)
@@ -128,7 +189,7 @@ class CoreTests(unittest.TestCase):
             build_manifest(self.settings, self.manifest(), dry_run=False)
 
     def test_reference_analysis_replace_and_batch(self) -> None:
-        template_name = "参考模板"
+        template_name = f"{TEST_DRAFT_NAME_PREFIX}参考模板"
         build_manifest(self.settings, self.manifest(template_name), dry_run=False)
         profile = analyze_reference_draft(self.settings, template_name, include_text=True)
         self.assertTrue(profile["success"])
@@ -137,7 +198,7 @@ class CoreTests(unittest.TestCase):
         result = build_from_reference(
             self.settings,
             template_name,
-            "参考生成",
+            f"{TEST_DRAFT_NAME_PREFIX}参考生成",
             replacements=[
                 {
                     "track_type": "video",
@@ -157,8 +218,8 @@ class CoreTests(unittest.TestCase):
             self.settings,
             template_name,
             [
-                {"name": "批量A", "text_replacements": [{"track_name": "标题", "segment_index": 0, "text": "A"}]},
-                {"name": "批量B", "text_replacements": [{"track_name": "标题", "segment_index": 0, "text": "B"}]},
+                {"name": f"{TEST_DRAFT_NAME_PREFIX}批量A", "text_replacements": [{"track_name": "标题", "segment_index": 0, "text": "A"}]},
+                {"name": f"{TEST_DRAFT_NAME_PREFIX}批量B", "text_replacements": [{"track_name": "标题", "segment_index": 0, "text": "B"}]},
             ],
             dry_run=True,
         )
@@ -171,11 +232,11 @@ class CoreTests(unittest.TestCase):
         if not encrypted.is_file():
             self.skipTest("没有加密草稿样本")
         self.assertEqual(classify_draft_bytes(encrypted.read_bytes()), "jianying_encrypted")
-        target = self.drafts / "加密参考"
+        target = self.drafts / f"{TEST_DRAFT_NAME_PREFIX}加密参考"
         target.mkdir()
         (target / "draft_content.json").write_bytes(encrypted.read_bytes())
         with self.assertRaises(ManifestError):
-            analyze_reference_draft(self.settings, "加密参考")
+            analyze_reference_draft(self.settings, f"{TEST_DRAFT_NAME_PREFIX}加密参考")
 
     def test_plaintext_loader_reports_format(self) -> None:
         source = self.root / "plain.json"
@@ -185,10 +246,16 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(loaded.content["tracks"], [])
 
     def test_unverified_features_rejected(self) -> None:
-        manifest = self.manifest("拒绝测试")
+        manifest = self.manifest(f"{TEST_DRAFT_NAME_PREFIX}拒绝测试")
         manifest["tracks"][0]["segments"][0]["mask"] = {"type": "圆形"}
-        with self.assertRaises(ManifestError):
+        with self.assertRaises(ManifestError) as baseline:
             build_manifest(self.settings, manifest, dry_run=True)
+        self.assertIn("10.0.5.13816", str(baseline.exception))
+        with self.assertRaises(ManifestError) as target:
+            build_manifest(self.target_settings, manifest, dry_run=True)
+        message = str(target.exception)
+        self.assertIn("候选", message)
+        self.assertIn("11.6", message)
 
     def test_video_observer_subtitles_frames_cache_and_observations(self) -> None:
         status = observer_status(self.settings)
