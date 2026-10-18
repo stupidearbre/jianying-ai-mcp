@@ -3,9 +3,11 @@
 ## 测试前
 
 1. 安装 Python 3.12、ffmpeg/ffprobe，并以 editable 模式安装项目。
-2. 修改 MCP 配置中的剪映、草稿、工作目录和 ffmpeg 路径。
-3. 启动客户端后先要求 Agent 调用 `get_jianying_capabilities`。
+2. 修改 MCP 配置中的剪映、草稿、工作目录和 ffmpeg 路径。配置示例只使用占位符，不写本机绝对路径。
+3. 启动客户端后先要求 Agent 调用 `get_jianying_capabilities`，并转述 `compatibility.message`。
 4. 不要把真实 API Key、客户素材或未授权视频提交到 Issue。
+5. 测试草稿名称使用前缀 `TEST-laowang-`。发布只新建；同名草稿已存在时换一个新名字，不覆盖。
+6. 剪映 `11.6.0.14552` 的界面回归用 [jianying_11_6_blackbox_checklist.md](jianying_11_6_blackbox_checklist.md)。该清单留给实机，自动化测试不代替它。
 
 ## 建议测试任务
 

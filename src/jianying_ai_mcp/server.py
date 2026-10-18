@@ -22,9 +22,12 @@ mcp = FastMCP(
     instructions=(
         "面向剪映的批处理草稿引擎。先调用 get_jianying_capabilities；"
         "每次执行必须向用户转述 compatibility.message。"
+        "profile_status 为 pending_blackbox 时要说明该版本待黑盒回归，不能声称已实测。"
+        "测试草稿名称使用前缀 TEST-laowang-，只新建不覆盖。"
         "新建复杂视频优先一次调用 build_draft；复刻结构用 build_from_reference；"
         "批量换料用 batch_from_template。需要理解视频时先调用 analyze_video_source，"
         "读取代表帧后调用 save_video_observations。默认先 dry_run，用户确认后再正式发布。"
+        "正式环境替换前须 wy 批准。"
     ),
 )
 
@@ -57,7 +60,7 @@ async def _execute(
 
 @mcp.tool()
 async def get_jianying_capabilities(ctx: Context) -> dict[str, Any]:
-    """返回已验证、禁用和首版未纳入的能力，并检测本机剪映版本。规划前必须调用。"""
+    """返回当前剪映 profile 的已验证、待黑盒回归、候选和禁用能力。规划前必须调用。"""
     settings = Settings.from_env()
     await _stage(ctx, 1, 1, "读取能力与版本")
     return {
@@ -192,6 +195,7 @@ async def build_draft(
     轨道 type 支持 video/audio/text/sticker/effect/filter。时间字段使用 start、duration；
     媒体可加 source_start/source_duration、speed。具体字段见 Skill 的 manifest-schema.md。
     默认 dry_run=true，只在暂存区完整构建和校验；确认后传 false 发布到剪映草稿目录。
+    发布只新建同名目录，已存在则拒绝覆盖。测试稿名称使用前缀 TEST-laowang-。
     """
     settings = Settings.from_env()
     return await _execute(

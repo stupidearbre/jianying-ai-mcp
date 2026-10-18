@@ -10,7 +10,7 @@ from typing import Any
 import pyJianYingDraft as draft
 from pyJianYingDraft.metadata import AudioSceneEffectType, SpeechToSongType, ToneEffectType
 
-from .config import Settings, compatibility_notice
+from .config import Settings, blocked_feature_reason, compatibility_notice, detected_jianying_version
 from .draft_crypto import DraftCryptoError, load_draft_json
 
 
@@ -115,9 +115,17 @@ def _shadow(data: dict[str, Any] | None) -> Any | None:
     return draft.TextShadow(**data)
 
 
-def _add_visual_features(segment: Any, item: dict[str, Any], *, text: bool = False) -> None:
-    if item.get("mask") or item.get("background_filling"):
-        raise ManifestError("mask 和 background_filling 在当前验证版本不可见，首版拒绝写入")
+def _add_visual_features(
+    segment: Any,
+    item: dict[str, Any],
+    *,
+    text: bool = False,
+    version: str | None = None,
+) -> None:
+    if item.get("mask"):
+        raise ManifestError(blocked_feature_reason("mask", version) or "mask 拒绝写入")
+    if item.get("background_filling"):
+        raise ManifestError(blocked_feature_reason("background_filling", version) or "background_filling 拒绝写入")
 
     transition = item.get("transition")
     if transition:
@@ -174,11 +182,11 @@ def _add_visual_features(segment: Any, item: dict[str, Any], *, text: bool = Fal
     for keyframe in item.get("keyframes", []):
         prop = _enum(draft.KeyframeProperty, keyframe["property"], "关键帧属性")
         if prop == draft.KeyframeProperty.volume:
-            raise ManifestError("音量关键帧未完成实际验证，首版拒绝写入")
+            raise ManifestError(blocked_feature_reason("audio_volume_keyframes", version) or "音量关键帧拒绝写入")
         segment.add_keyframe(prop, keyframe["time"], float(keyframe["value"]))
 
 
-def _video_segment(item: dict[str, Any]) -> Any:
+def _video_segment(item: dict[str, Any], version: str | None) -> Any:
     source = Path(item["source"]).expanduser().resolve()
     if not source.is_file():
         raise FileNotFoundError(source)
@@ -191,16 +199,16 @@ def _video_segment(item: dict[str, Any]) -> Any:
         change_pitch=bool(item.get("change_pitch", False)),
         clip_settings=_clip(item.get("clip")),
     )
-    _add_visual_features(segment, item)
+    _add_visual_features(segment, item, version=version)
     return segment
 
 
-def _audio_segment(item: dict[str, Any]) -> Any:
+def _audio_segment(item: dict[str, Any], version: str | None) -> Any:
     source = Path(item["source"]).expanduser().resolve()
     if not source.is_file():
         raise FileNotFoundError(source)
     if item.get("keyframes"):
-        raise ManifestError("音量关键帧未完成实际验证，首版拒绝写入")
+        raise ManifestError(blocked_feature_reason("audio_volume_keyframes", version) or "音量关键帧拒绝写入")
     segment = draft.AudioSegment(
         str(source),
         _timerange(item),
@@ -230,7 +238,7 @@ def _audio_segment(item: dict[str, Any]) -> Any:
     return segment
 
 
-def _text_segment(item: dict[str, Any]) -> Any:
+def _text_segment(item: dict[str, Any], version: str | None) -> Any:
     font = _enum(draft.FontType, item["font"], "字体") if item.get("font") else None
     background = draft.TextBackground(**item["background"]) if item.get("background") else None
     segment = draft.TextSegment(
@@ -243,7 +251,7 @@ def _text_segment(item: dict[str, Any]) -> Any:
         background=background,
         shadow=_shadow(item.get("shadow")),
     )
-    _add_visual_features(segment, item, text=True)
+    _add_visual_features(segment, item, text=True, version=version)
     if item.get("bubble"):
         segment.add_bubble(item["bubble"]["effect_id"], item["bubble"]["resource_id"])
     if item.get("flower_text_resource_id"):
@@ -335,18 +343,19 @@ def build_manifest(settings: Settings, manifest: dict[str, Any], *, dry_run: boo
             specs.append(draft.TrackSpec(_enum(draft.TrackType, track_type, "轨道类型"), track_name))
         script.append_tracks(specs)
 
+        draft_version = detected_jianying_version(settings)
         for track in tracks:
             track_type = track["type"]
             track_name = track["name"]
             for item in track.get("segments", []):
                 if track_type == "video":
-                    segment = _video_segment(item)
+                    segment = _video_segment(item, draft_version)
                     script.add_segment(segment, track=track_name)
                 elif track_type == "audio":
-                    segment = _audio_segment(item)
+                    segment = _audio_segment(item, draft_version)
                     script.add_segment(segment, track=track_name)
                 elif track_type == "text":
-                    segment = _text_segment(item)
+                    segment = _text_segment(item, draft_version)
                     script.add_segment(segment, track=track_name)
                 elif track_type == "sticker":
                     segment = _sticker_segment(item)

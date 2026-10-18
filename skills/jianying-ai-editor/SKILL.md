@@ -21,7 +21,7 @@ description: Understand local or URL videos through timestamped transcripts and 
 ## 固定工作流
 
 1. 调用 `get_jianying_capabilities`。
-2. 每次都向用户转述 `compatibility.message`。版本不一致时必须说明动画、在线资源、滤镜和草稿结构可能不同，并要求生成后抽样确认。
+2. 每次都向用户转述 `compatibility.message`。`pending_blackbox` 必须说成待黑盒回归，不能把 `10.0.5.13816` 的结论说成 11.6 已实测。未登记版本要说明动画、在线资源、滤镜和草稿结构可能不同，并要求生成后抽样确认。正式环境替换前须 wy 批准。
 3. 给出 3–7 个简短阶段标题，让用户知道正在规划、校验、生成或发布。
 4. 选择工具：
    - 理解视频或参考成片：`analyze_video_source`，读取返回的代表帧后调用 `save_video_observations`
@@ -60,7 +60,7 @@ description: Understand local or URL videos through timestamped transcripts and 
 
 ## 安全与效率
 
-- 新草稿默认不覆盖同名草稿；不要删除或修改用户其他草稿。
+- 新草稿默认不覆盖同名草稿；不要删除或修改用户其他草稿。测试稿名称使用前缀 `TEST-laowang-`，只新建。
 - 只接受绝对素材路径；发布前校验素材存在、时间范围、轨道重叠和草稿 JSON。
 - 色度抠图颜色必须是 `#RRGGBBAA`。
 - 同一音频片段每类音效最多一个。

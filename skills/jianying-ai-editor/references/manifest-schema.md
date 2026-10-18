@@ -4,7 +4,7 @@
 
 ```json
 {
-  "draft": {"name": "产品短片_01", "width": 1920, "height": 1080, "fps": 30},
+  "draft": {"name": "TEST-laowang-产品短片_01", "width": 1920, "height": 1080, "fps": 30},
   "tracks": [
     {
       "type": "video",
@@ -38,6 +38,8 @@
   ]
 }
 ```
+
+测试发布使用 `TEST-laowang-` 前缀，并且只新建不覆盖。正式稿名称由用户指定。示例不写本机绝对路径。
 
 ## 公共字段
 

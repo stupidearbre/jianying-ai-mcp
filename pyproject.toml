@@ -9,7 +9,7 @@ description = "Video-aware, batch-first MCP server for safe Jianying draft gener
 requires-python = ">=3.12"
 dependencies = [
   "mcp>=1.12,<2",
-  "pyJianYingDraft==0.3.0",
+  "pyJianYingDraft==0.3.1",
 ]
 
 [project.optional-dependencies]
