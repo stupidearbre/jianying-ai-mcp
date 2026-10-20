@@ -92,6 +92,8 @@ ffmpeg/ffprobe 可从 `PATH` 自动发现，也可通过环境变量显式配置
 
 当前不自动操作剪映内置音乐/音效库、TTS、节拍卡点和自动导出。独立视频观察器已支持旁挂字幕及可选 Whisper 语句级转写，但不等同于剪映内置字幕识别。蒙版在两个 profile 上都拒绝写入：10.0.5 实测未显示，11.6 只是 pyJianYingDraft 0.3.1 的未实测候选。模糊背景及音量关键帧同样拒绝写入。参考草稿支持明文 JSON；既有本地读取器仍只覆盖原来的只读副本流程，不为 11.6 加强加密读取。
 
+与 [luoluoluo22/jianying-editor-skill](https://github.com/luoluoluo22/jianying-editor-skill) v1.7.0 的对照见 [docs/compare_jianying_editor_skill.md](docs/compare_jianying_editor_skill.md)。
+
 第三方许可说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 每次工具调用都返回版本 profile。`10.0.5.13816` 是已验证基线；`11.6.0.14552` 核心效果项已黑盒通过，但仍须说明贴纸/字体/气泡/模板换料与导出等未测项，且正式替换须可回退。未登记版本仍要说明预设、在线资源和草稿结构可能变化，并先生成小样抽检。测试草稿名称使用前缀 `TEST-laowang-`，只新建不覆盖。
